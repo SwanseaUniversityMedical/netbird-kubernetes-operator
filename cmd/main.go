@@ -34,6 +34,7 @@ import (
 	nbv1 "github.com/netbirdio/kubernetes-operator/api/v1"
 	nbv1alpha1 "github.com/netbirdio/kubernetes-operator/api/v1alpha1"
 	"github.com/netbirdio/kubernetes-operator/internal/controller"
+	"github.com/netbirdio/kubernetes-operator/internal/watchnamespaces"
 	nbwebhookv1 "github.com/netbirdio/kubernetes-operator/internal/webhook/v1"
 	"github.com/netbirdio/kubernetes-operator/pkg/version"
 )
@@ -68,6 +69,7 @@ func main() {
 		allowAutomaticPolicyCreation bool
 		defaultLabels                string
 		gatewayAPIEnabled            bool
+		watchNamespacesFlag          string
 	)
 	flag.StringVar(&runtimeNamespace, "runtime-namespace", "", "Namespace the controller is running in")
 	flag.StringVar(&managementURL, "netbird-management-url", "https://api.netbird.io", "Management service URL")
@@ -99,6 +101,8 @@ func main() {
 		"Default labels used for all resources, in format key=value,key=value",
 	)
 	flag.BoolVar(&gatewayAPIEnabled, "gateway-api-enabled", false, "When true Gateway API resources will be reconciled.")
+	flag.StringVar(&watchNamespacesFlag, "watch-namespaces", "",
+		"Comma-separated namespaces to watch. Empty watches all namespaces. When set, controllers for cluster-scoped kinds do not run.")
 
 	// Controller generic flags
 	var (
@@ -128,6 +132,13 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	watchNamespaces := watchnamespaces.Parse(watchNamespacesFlag)
+	clusterScoped := watchnamespaces.ClusterScopedControllersEnabled(watchNamespaces)
+	if !clusterScoped && allowAutomaticPolicyCreation {
+		setupLog.Error(errors.New("needs the NBPolicy controller"), "--allow-automatic-policy-creation cannot be used with --watch-namespaces")
+		os.Exit(1)
+	}
 
 	_, err := url.Parse(managementURL)
 	if err != nil {
@@ -190,6 +201,7 @@ func main() {
 		Client: client.Options{
 			FieldOwner: "netbird-operator",
 		},
+		Cache:                   watchnamespaces.CacheOptions(watchNamespaces),
 		WebhookServer:           webhookServer,
 		HealthProbeBindAddress:  probeAddr,
 		LeaderElectionNamespace: runtimeNamespace,
@@ -267,12 +279,14 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err = (&controller.NBPolicyReconciler{
-			Client:  mgr.GetClient(),
-			Netbird: nbClient,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "NBPolicy")
-			os.Exit(1)
+		if clusterScoped {
+			if err = (&controller.NBPolicyReconciler{
+				Client:  mgr.GetClient(),
+				Netbird: nbClient,
+			}).SetupWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "NBPolicy")
+				os.Exit(1)
+			}
 		}
 
 		if enableWebhooks {
@@ -334,7 +348,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if gatewayAPIEnabled {
+		if gatewayAPIEnabled && clusterScoped {
 			if err = (&controller.GatewayClassReconciler{
 				Client: mgr.GetClient(),
 			}).SetupWithManager(mgr); err != nil {

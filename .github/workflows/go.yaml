@@ -6,7 +6,9 @@ on:
       - 'main'
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: [ self-hosted, linux, x64 ]
+      group: heavy
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
@@ -16,15 +18,21 @@ jobs:
           go-version-file: go.mod
       - name: Run linter
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a #v9.3.0
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
       # The e2e tests are a separate module behind the e2e build tag, so the pass
       # above sees none of them.
       - name: Run linter (e2e)
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a #v9.3.0
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
         with:
           working-directory: test/e2e
           args: --build-tags e2e
   test:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: [ self-hosted, linux, x64 ]
+      group: heavy
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
@@ -32,19 +40,20 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
         with:
           go-version-file: go.mod
+      - name: Install make
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends make
       - name: Verify go mod is not dirty
         run: |
           go mod tidy
           (cd test/e2e && go mod tidy)
           git diff --exit-code
       - name: Verify generate is not dirty
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
         run: |
           make -B generate
           git diff --exit-code
       - name: Run unit tests
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
         run: make test-unit
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 #v7.1.1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: unit

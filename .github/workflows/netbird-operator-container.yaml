@@ -1,0 +1,50 @@
+name: NetBird Operator Container
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/netbird-operator-container.yaml'
+      - 'build/netbird-operator/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'api/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'pkg/**'
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '.github/workflows/netbird-operator-container.yaml'
+      - 'build/netbird-operator/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'api/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'pkg/**'
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  netbird-operator-container:
+    uses: SwanseaUniversityMedical/workflows/.github/workflows/pr-and-release-container.yaml@v5.0.0-containers
+    with:
+      job-name: netbird-operator-container
+      comment-pr: "true"
+      registry: ${{ vars.HARBOR_REGISTRY }}
+      registry-user: ${{ vars.HARBOR_USER }}
+      registry-repo: ${{ vars.HARBOR_PROJECT }}/netbird-operator
+      release-tag-format: 'netbird-operator-container-${version}'
+      notation-cert: ${{ vars.NOTATION_CERT }}
+      build-file: build/netbird-operator/Dockerfile
+    secrets:
+      notation-key: ${{ secrets.NOTATION_KEY }}
+      registry-token: ${{ secrets.HARBOR_TOKEN }}
