@@ -18,10 +18,14 @@ jobs:
           go-version-file: go.mod
       - name: Run linter
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a #v9.3.0
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
       # The e2e tests are a separate module behind the e2e build tag, so the pass
       # above sees none of them.
       - name: Run linter (e2e)
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a #v9.3.0
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
         with:
           working-directory: test/e2e
           args: --build-tags e2e
@@ -44,8 +48,12 @@ jobs:
           (cd test/e2e && go mod tidy)
           git diff --exit-code
       - name: Verify generate is not dirty
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
         run: |
           make -B generate
           git diff --exit-code
       - name: Run unit tests
+        env:
+          HTTPS_PROXY: http://192.168.10.15:8080
         run: make test-unit
